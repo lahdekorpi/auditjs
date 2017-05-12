@@ -40,6 +40,8 @@ const DOMParser = require('xmldom').DOMParser;
 const XMLSerializer = require('xmldom').XMLSerializer;
 //write found vulnerabilities to JUnit xml
 const jsontoxml = require('jsontoxml');
+//use winston for logging
+const winston = require('winston');
 
 // File system access
 const fs = require('fs');
@@ -97,6 +99,7 @@ program
         .option('-n --noNode', 'Ignore node executable when scanning node_modules.')
         .option('-p --package <file>', 'Specific package.json or bower.json file to audit')
         .option('-q --quiet', 'Supress console logging')
+        .option('-l --level <level>', 'Logging level. Possible options: error, warn, info, verbose, debug, silly')
         .option('-r --report', 'Create JUnit reports in reports/ directory')
         .option('-v --verbose', 'Print all vulnerabilities')
         .option('-w --whitelist <file>', 'Whitelist of vulnerabilities that should not break the build,\n\t\t\t\t e.g. XSS vulnerabilities for an app with no possbile input for XSS.\b\t\t\t\t                                 See Example test_data/audit_package_whitelist.json.')
@@ -108,6 +111,13 @@ program.on('--help', () => {
 });
 
 program.parse(process.argv);
+
+//Set logging level based on environmental value or flag
+let logger = new (winston.Logger)({
+        transports: [
+                new (winston.transports.Console)({ level: process.env.LOG_LEVEL || (program['quiet']?'error':false) || (['error', 'warn', 'info', 'verbose', 'debug', 'silly'].includes(program['level'])?program['level']:false) || 'info' })
+        ]
+});
 if(program['quiet']){
         console.log = () => {};
         process.stdout.write = () => {};
