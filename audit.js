@@ -33,65 +33,64 @@
  * vulnerabilities.
  */
 //create reports directory
-var mkdirp = require('mkdirp');
-var path = require('path');
+const mkdirp = require('mkdirp');
+const path = require('path');
 //sumarize results in JUnit with this
-var DOMParser = require('xmldom').DOMParser;
-var XMLSerializer = require('xmldom').XMLSerializer;
+const DOMParser = require('xmldom').DOMParser;
+const XMLSerializer = require('xmldom').XMLSerializer;
 //write found vulnerabilities to JUnit xml
-var jsontoxml = require('jsontoxml');
+const jsontoxml = require('jsontoxml');
 
 // File system access
-var fs = require('fs');
+const fs = require('fs');
 
 // Next two requires used to get version from out package.json file
-var path = require('path');
-var pkg = require( path.join(__dirname, 'package.json') );
+const pkg = require( path.join(__dirname, 'package.json') );
 
 // Actual auditing "library". The library uses the OSS Index REST API
 // to retrieve dependency information.
-var auditor = require('./audit-package');
+const auditor = require('./audit-package');
 
 // Adds colors to console output
-var colors = require('colors/safe');
+const colors = require('colors/safe');
 
 // Decode HTML entities
-var Entities = require('html-entities').AllHtmlEntities;
-var entities = new Entities();
+const Entities = require('html-entities').AllHtmlEntities;
+const entities = new Entities();
 
 // Semantic version code
-var semver = require('semver');
+const semver = require('semver');
 
 // dictionary of vulnerable packages for xml-report
-var JUnit = { 'testsuite':[] };
+let JUnit = { 'testsuite':[] };
 
 // Used to find installed packages and their dependencies
-var npm = require('npm');
+const npm = require('npm');
 
 /**
  * Total number of dependencies being audited. This will be set
  * before starting the audit.
  */
-var expectedAudits = 0;
+let expectedAudits = 0;
 
 /**
  * Total number of dependencies audited so far.
  */
-var actualAudits = 0;
+let actualAudits = 0;
 
 /**
  * List of dependencies that we want to check after the package checks.
  */
-var dependencies = [];
+let dependencies = [];
 
 /**
  * Count encountered vulnerabilities
  */
-var vulnerabilityCount = 0;
+let vulnerabilityCount = 0;
 
 //Parse command line options. We currently support only one argument so
 // this is a little overkill. It allows for future growth.
-var program = require('commander');
+const program = require('commander');
 program
         .version(pkg.version)
         .option('-b --bower', 'This flag is necessary to correctly audit bower\n\t\t\t\t packages. Use together with -p bower.json, since\n\t\t\t\t scanning bower_componfents is not supported')
@@ -101,34 +100,34 @@ program
         .option('-r --report', 'Create JUnit reports in reports/ directory')
         .option('-v --verbose', 'Print all vulnerabilities')
         .option('-w --whitelist <file>', 'Whitelist of vulnerabilities that should not break the build,\n\t\t\t\t e.g. XSS vulnerabilities for an app with no possbile input for XSS.\b\t\t\t\t                                 See Example test_data/audit_package_whitelist.json.')
-        .action(function () {
+        .action(() => {
         });
 
-program.on('--help', function(){
+program.on('--help', () => {
         usage();
 });
 
 program.parse(process.argv);
 if(program['quiet']){
-        console.log = function(){};
-        process.stdout.write = function(){};
+        console.log = () => {};
+        process.stdout.write = () => {};
 }
 if(program['bower'] && !program['package']){
         throw Error('Use -b option together with -p bower.json. Bower dependencies are flat, therefore it is enough to only support the auditing of bower.json files.');
 }
-var programPackage = program['package'] ? path.basename(program['package']): 'scan_node_modules.json';
-var output = `${programPackage.toString().split('.json').slice(0, -1)}.xml`;
-var pm = program['bower'] ? 'bower' : 'npm'
-var whitelist = program['whitelist'] ? fs.readFileSync(program['whitelist'], 'utf-8') : null;
+const programPackage = program['package'] ? path.basename(program['package']): 'scan_node_modules.json';
+let output = `${programPackage.toString().split('.json').slice(0, -1)}.xml`;
+const pm = program['bower'] ? 'bower' : 'npm'
+const whitelist = program['whitelist'] ? fs.readFileSync(program['whitelist'], 'utf-8') : null;
 
 
 // By default we run an audit against all installed packages and their
 // dependencies.
 if (!program["package"]) {
-        npm.load(function(err, npm) {
-                npm.commands.ls([], true, function(err, data, lite) {
+        npm.load((err, npm) => {
+                npm.commands.ls([], true, (err, data, lite) => {
                         // Get a flat list of dependencies instead of a map.
-                        var deps = getDependencyList(data.dependencies);
+                        let deps = getDependencyList(data.dependencies);
                         if(program.noNode) {
                                 // Set the number of expected audits
                                 expectedAudits = deps.length;
@@ -142,7 +141,7 @@ if (!program["package"]) {
 
                                 // First check for node itself. We use the 'chocolatey' package manager
                                 // to hang this query on.
-                                auditor.auditPackage("chocolatey", "nodejs", process.version, function(err, data) {
+                                auditor.auditPackage("chocolatey", "nodejs", process.version, (err, data) => {
                                         resultCallback(err, data);
 
                                         // Now check for the dependencies
@@ -158,15 +157,15 @@ if (!program["package"]) {
 else {
 
         //Load the target package file
-        var filename = program["package"];
-        var targetPkg = undefined;
+        let filename = program["package"];
+        let targetPkg = undefined;
 
         try {
                 // default encoding is utf8
                 encoding = 'utf8';
 
                 // read file synchroneously
-                var contents = fs.readFileSync(filename, encoding);
+                let contents = fs.readFileSync(filename, encoding);
 
                 // parse contents as JSON
                 targetPkg = JSON.parse(contents);
@@ -181,7 +180,7 @@ else {
         // print the results to the console.
         if(targetPkg.dependencies != undefined) {
                 // Get a flat list of dependencies instead of a map.
-                var deps = getDependencyList(targetPkg.dependencies);
+                let deps = getDependencyList(targetPkg.dependencies);
                 expectedAudits = deps.length;
                 auditor.auditPackages(deps, resultCallback);
         }
@@ -195,21 +194,21 @@ else {
  */
 function exitHandler(options, err) {
         if(program['report']) {
-                var filtered = 0;
+                let filtered = 0;
                 mkdirp('reports');
                 JUnit = jsontoxml(JUnit);
-                var dom = new DOMParser().parseFromString(JUnit);
+                let dom = new DOMParser().parseFromString(JUnit);
                 if(whitelist){
                         whitelist = JSON.parse(whitelist);
                         console.log(colors.bold('Applying whitelist filtering for JUnit reports. Take care to keep the whitelist up to date!'));
                         // The only xml nodes that need filtering are ones containing the failure tag.
-                        for( var j=0; j<dom.documentElement.getElementsByTagName('failure').length; j++){
+                        for( let j=0; j<dom.documentElement.getElementsByTagName('failure').length; j++){
                                 console.log(colors.bold.yellow(`Filtering the following vulnerabilities for ${dom.documentElement.getElementsByTagName('failure')[j].parentNode.getAttribute('name')}:`));
-                                var report = dom.documentElement.getElementsByTagName('failure')[j].textContent;
+                                let report = dom.documentElement.getElementsByTagName('failure')[j].textContent;
                                 report = report.split('\n');
                                 report.shift();
                                 report = JSON.parse(report.join('\n'));
-                                var skip = [];
+                                let skip = [];
                                 for(key in whitelist[dom.documentElement.getElementsByTagName('failure')[j].parentNode.getAttribute('name')]){
                                         skip.push(whitelist[dom.documentElement.getElementsByTagName('failure')[j].parentNode.getAttribute('name')][key]['id']);
                                 }
@@ -222,7 +221,7 @@ function exitHandler(options, err) {
                                         }
                                 }
                                 console.log(colors.bold.yellow('=================================================='));
-                        
+
                                 if(checkProperties(report)){
                                         // report is empty
                                         filtered += 1;
@@ -271,7 +270,7 @@ process.on('uncaughtException', exitHandler.bind(null, {exit:true}));
 
 // Check if all properties of an object are null and return true if they are
 function checkProperties(obj) {
-        for (var key in obj) {
+        for (let key in obj) {
                 if (obj[key] !== null && obj[key] != "")
                         return false;
         }
@@ -285,21 +284,21 @@ function checkProperties(obj) {
  * @returns A list of dependency objects
  */
 function getDependencyList(depMap) {
-        var results = [];
-        var lookup = {};
-        var keys = Object.keys(depMap);
-        for(var i = 0; i < keys.length; i++) {
-                var name = keys[i];
+        let results = [];
+        let lookup = {};
+        let keys = Object.keys(depMap);
+        for(let i = 0; i < keys.length; i++) {
+                let name = keys[i];
 
                 // The value of o depends on the type of structure we are passed
-                var o = depMap[name];
+                let o = depMap[name];
                 if(o.version) {
                         // Only add a dependency once
                         if(lookup[name + o.version] == undefined) {
                                 lookup[name + o.version] = true;
                                 results.push({"pm": pm, "name": name, "version": o.version});
                                 if(o.dependencies) {
-                                        var deps = getDependencyList(o.dependencies);
+                                        let deps = getDependencyList(o.dependencies);
 
                                         if(deps != undefined) {
                                                 results = results.concat(deps);
@@ -367,7 +366,7 @@ function resultCallback(err, pkg) {
 
         // If we KNOW a possibly used version is vulnerable then highlight the
         // title in red.
-        var myVulnerabilities = getValidVulnerabilities(version, pkg.vulnerabilities);
+        let myVulnerabilities = getValidVulnerabilities(version, pkg.vulnerabilities);
         if(myVulnerabilities.length > 0) {
                 vulnerabilityCount += 1;
                 console.log("------------------------------------------------------------");
@@ -435,7 +434,7 @@ function resultCallback(err, pkg) {
                         console.log(pkg.vulnerabilities.length + " known vulnerabilities, " + myVulnerabilities.length + " affecting installed version");
 
                         // By default only print known problems
-                        var printTheseProblems = myVulnerabilities;
+                        let printTheseProblems = myVulnerabilities;
 
                         // If verbose, print all problems
                         if(program.verbose) {
@@ -443,10 +442,10 @@ function resultCallback(err, pkg) {
                         }
 
                         // We have decided that these are the problems worth mentioning.
-                        for(var i = 0; i < printTheseProblems.length; i++) {
+                        for(let i = 0; i < printTheseProblems.length; i++) {
                                 console.log();
 
-                                var detail = printTheseProblems[i];
+                                let detail = printTheseProblems[i];
                                 console.log(colors.red.bold(detail.title));
 
                                 if(detail.description != undefined) {
@@ -456,7 +455,7 @@ function resultCallback(err, pkg) {
 
                                 // Print affected version information if available
                                 if(detail.versions != null && detail.versions.length > 0) {
-                                        var vers = detail.versions.join(",");
+                                        let vers = detail.versions.join(",");
                                         if(vers.trim() == "") {
                                                 vers = "unspecified";
                                         }
@@ -468,7 +467,7 @@ function resultCallback(err, pkg) {
 
                                 if (detail.references != undefined && detail.references.length > 0) {
                                         console.log(colors.bold("References") + ":");
-                                        for (var j = 0; j < detail.references.length; j++) {
+                                        for (let j = 0; j < detail.references.length; j++) {
                                                 console.log("  * " + detail.references[j]);
                                         }
                                 }
@@ -504,15 +503,15 @@ function resultCallback(err, pkg) {
  * @returns
  */
 function getValidVulnerabilities(productRange, details) {
-        var results = [];
+        let results = [];
         if(details != undefined) {
-                for(var i = 0; i < details.length; i++) {
-                        var detail = details[i];
+                for(let i = 0; i < details.length; i++) {
+                        let detail = details[i];
 
                         if(detail.versions != undefined && detail.versions.length > 0) {
-                                for(var j = 0; j < detail.versions.length; j++) {
+                                for(let j = 0; j < detail.versions.length; j++) {
                                         // Get the vulnerability range
-                                        var vulnRange = detail.versions[j]
+                                        let vulnRange = detail.versions[j]
 
                                         if(rangesOverlap(productRange, vulnRange)) {
                                                 results.push(detail);
@@ -546,12 +545,12 @@ function rangesOverlap(prange, vrange) {
         // Both prange and vrange are ranges. A simple test for overlap for not
         // is to attempt to coerce a range into static versions and compare
         // with the other ranges.
-        var pversion = forceSemanticVersion(prange);
+        let pversion = forceSemanticVersion(prange);
         if(pversion != undefined) {
                 if(semver.satisfies(pversion, vrange)) return true;
         }
 
-        var vversion = forceSemanticVersion(vrange);
+        let vversion = forceSemanticVersion(vrange);
         if(vversion != undefined) {
                 if(semver.satisfies(vversion, prange)) return true;
         }
@@ -581,8 +580,8 @@ function getSemanticVersion(version) {
  * @returns
  */
 function forceSemanticVersion(range) {
-        var re = /([0-9]+)\.([0-9]+)\.([0-9]+)/;
-        var match = range.match(re);
+        let re = /([0-9]+)\.([0-9]+)\.([0-9]+)/;
+        let match = range.match(re);
         if(match != undefined) {
                 return match[1] + "." + match[2] + "." + match[3];
         }
